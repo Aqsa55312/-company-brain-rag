@@ -4,30 +4,27 @@ import { API } from "../../lib/api";
 
 export default function Topbar() {
   const [user, setUser] = useState("");
-  const [healthOk, setHealthOk] = useState(null);
+  const [ok, setOk] = useState(null);
   useEffect(() => {
     setUser(localStorage.getItem("brain_user") || "");
-    fetch(`${API}/health/live`).then(() => setHealthOk(true)).catch(() => setHealthOk(false));
+    fetch(`${API}/health/live`).then(() => setOk(true)).catch(() => setOk(false));
   }, []);
   function logout() {
     localStorage.removeItem("brain_token");
     localStorage.removeItem("brain_user");
-    setUser("");
     window.location.href = "/login";
   }
+  const d = new Date();
+  const hari = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"][d.getDay()];
   return (
     <div className="topbar">
-      <div>
-        <h1>Portal Internal</h1>
-        <div className="sub">RAG + Lakehouse + Analytics — P4 Final</div>
-      </div>
-      <div className="pill">
-        <span className={`dot ${healthOk ? "ok" : healthOk === false ? "bad" : ""}`} />
-        {healthOk ? "API live" : healthOk === false ? "API mati" : "cek API…"}
+      <div className="crumb"><b>Arsip Internal</b> / {hari}, {d.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}</div>
+      <div className="top-right">
+        <span className="status"><span className={`dot ${ok ? "ok" : ok === false ? "bad" : ""}`} />{ok ? "sistem live" : ok === false ? "API mati" : "menghubungi…"}</span>
         {user ? (
-          <span className="user-chip">👤 {user}<button onClick={logout}>Keluar</button></span>
+          <span className="who"><span className="avatar">{user[0]?.toUpperCase()}</span>{user}<button className="link-btn" onClick={logout}>Keluar</button></span>
         ) : (
-          <a className="btn" style={{ padding: "8px 13px" }} href="/login">Login</a>
+          <a className="link-btn" href="/login">Masuk →</a>
         )}
       </div>
     </div>
