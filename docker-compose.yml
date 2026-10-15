@@ -1,0 +1,102 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-companybrain}
+      POSTGRES_USER: ${POSTGRES_USER:-brain}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-brain123}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-brain}"]
+      interval: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - miniodata:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    volumes:
+      - qdrantdata:/qdrant/storage
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollamadata:/root/.ollama
+    ports:
+      - "11434:11434"
+    # Model ditarik manual di P2 agar P1 ringan:
+    # docker exec -it company-brain-ollama-1 ollama pull nomic-embed-text
+    # docker exec -it company-brain-ollama-1 ollama pull llama3.1:8b
+
+  api:
+    build: ./services/api
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://$${POSTGRES_USER:-brain}:$${POSTGRES_PASSWORD:-brain123}@postgres:5432/$${POSTGRES_DB:-companybrain}
+      MINIO_ENDPOINT: minio:9000
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION: $${QDRANT_COLLECTION:-brain_chunks}
+      OLLAMA_URL: http://ollama:11434
+      EMBED_MODEL: $${EMBED_MODEL:-nomic-embed-text}
+      CHAT_MODEL: $${CHAT_MODEL:-llama3.1:8b}
+      ALLOWED_ORIGINS: $${ALLOWED_ORIGINS:-http://localhost:3000}
+      MAX_UPLOAD_MB: $${MAX_UPLOAD_MB:-20}
+      RATE_LIMIT_ENABLE: $${RATE_LIMIT_ENABLE:-true}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+
+  web:
+    build: ./apps/web
+    env_file: .env
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./infra/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    profiles: ["observability"]
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3001:3000"
+    profiles: ["observability"]
+
+volumes:
+  pgdata:
+  miniodata:
+  qdrantdata:
+  ollamadata:
